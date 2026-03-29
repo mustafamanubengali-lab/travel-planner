@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Travel Planner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Travel Planner</h1>
+      <p class="subtitle">Tell us about your dream trip</p>
+    </header>
+
+    <div class="chat-container" id="chatContainer">
+      <div class="message assistant">
+        <div class="message-content">
+          Hey! I'd love to help you plan a trip. Tell me a bit about what you're looking for — where you'd like to go, what kind of vibe, how many people, whatever comes to mind!
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-item" data-field="location">
+          <span class="dot"></span> Location
+        </div>
+        <div class="progress-item" data-field="tripTypes">
+          <span class="dot"></span> Trip type
+        </div>
+        <div class="progress-item" data-field="budget">
+          <span class="dot"></span> Budget
+        </div>
+        <div class="progress-item" data-field="numberOfPeople">
+          <span class="dot"></span> Group size
+        </div>
+      </div>
+      <form id="chatForm">
+        <textarea
+          id="userInput"
+          placeholder="Describe your ideal trip..."
+          rows="2"
+          autofocus
+        ></textarea>
+        <button type="submit" id="sendBtn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

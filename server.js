@@ -3,9 +3,16 @@ const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const path = require('path');
 
+const LocationAgent = require('./src/agents/location-agent');
+
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+const locationAgent = new LocationAgent(process.env.GEMINI_API_KEY);
+
+// Store location search results (keyed by session ID)
+const searchResults = new Map();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
@@ -13,19 +20,21 @@ const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 // Store conversations in memory (keyed by session ID)
 const sessions = new Map();
 
-const SYSTEM_PROMPT = `You are a friendly travel planning assistant. Your job is to help the user plan their ideal trip.
+const SYSTEM_PROMPT = `You are a travel agent bot. Your goal is to understand where the user wants to go, and use that to determine possible locations.
 
 You need to gather 4 required pieces of information:
-1. **Current location** — where they're traveling from
+1. **Current location / starting point** — where they're traveling from
 2. **Trip type(s)** — e.g. beach, adventure, partying, city, cultural, relaxation, nature, road trip (can be multiple)
 3. **Budget** — total or per-person budget with currency
 4. **Number of people** — solo, couple, group size
 
 RULES:
-- The user will describe their trip in natural language. Extract whatever you can from their message.
-- For any MISSING required fields, ask a natural follow-up question. Don't be robotic — be conversational and warm.
+- Extract ONLY what the user explicitly says. Do NOT assume, infer, or add details they didn't mention. For example, if they say "somewhere sunny", do NOT assume they want a beach trip — "sunny" is just a constraint.
+- If something is unclear, you can check to confirm, but don't put words in their mouth.
+- For any MISSING required fields, ask a short, natural follow-up question.
 - Ask about at most 2 missing fields per message to keep it natural.
-- Any extra details (food preferences, flight duration limits, accessibility needs, dates, etc.) are optional constraints — acknowledge them.
+- Keep your responses concise — don't over-explain or repeat yourself.
+- Any extra details (food preferences, flight duration limits, dates, weather preferences, etc.) are optional constraints — note them without expanding on them.
 - Once you have ALL 4 required fields, confirm what you've gathered in a brief summary and say you're ready to find destinations.
 
 RESPONSE FORMAT:
@@ -108,9 +117,44 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// Trigger location discovery agent
+app.post('/api/discover', async (req, res) => {
+  const { sessionId, requirements } = req.body;
+
+  if (!requirements) {
+    return res.status(400).json({ error: 'requirements are required' });
+  }
+
+  // Start the search — respond immediately, client will poll for results
+  searchResults.set(sessionId, { status: 'searching', clusters: null });
+
+  // Run in background
+  locationAgent
+    .findLocations(requirements)
+    .then((clusters) => {
+      searchResults.set(sessionId, { status: 'done', clusters });
+    })
+    .catch((err) => {
+      console.error('Location agent error:', err);
+      searchResults.set(sessionId, { status: 'error', error: err.message });
+    });
+
+  res.json({ status: 'searching' });
+});
+
+// Poll for discovery results
+app.get('/api/discover/:sessionId', (req, res) => {
+  const result = searchResults.get(req.params.sessionId);
+  if (!result) return res.json({ status: 'not_started' });
+  res.json(result);
+});
+
 app.post('/api/reset', (req, res) => {
   const { sessionId } = req.body;
-  if (sessionId) sessions.delete(sessionId);
+  if (sessionId) {
+    sessions.delete(sessionId);
+    searchResults.delete(sessionId);
+  }
   res.json({ ok: true });
 });
 
